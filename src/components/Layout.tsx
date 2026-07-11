@@ -1,20 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { 
-  Menu,
-  X,
-  LayoutDashboard, 
-  LineChart, 
-  Compass, 
-  FileText, 
-  Settings as SettingsIcon, 
-  LogOut,
-  CheckCircle,
-  AlertTriangle
-} from 'lucide-react';
+import { useSystem } from '../context/SystemContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type PageId = 'dashboard' | 'analytics' | 'explore' | 'activity' | 'settings';
+export type PageId = 'dashboard' | 'leaves' | 'settings';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,15 +12,14 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }) => {
-  const { signOut, isMockMode } = useAuth();
+  const { isMockMode, signOut } = useAuth();
+  const { currentFaculty } = useSystem();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'analytics', label: 'Analytics', icon: LineChart },
-    { id: 'explore', label: 'Explore', icon: Compass },
-    { id: 'activity', label: 'Activity', icon: FileText },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon },
+    { id: 'dashboard', label: 'Dashboard & Operations', shortLabel: 'Dashboard' },
+    { id: 'leaves',    label: 'Leave & Swaps',          shortLabel: 'Leaves'    },
+    { id: 'settings',  label: 'Profile & Settings',     shortLabel: 'Settings'  },
   ] as const;
 
   const handleNavClick = (pageId: PageId) => {
@@ -40,142 +28,217 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurren
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 selection:bg-indigo-650/40">
-      
-      {/* Clean Navbar */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-900 bg-slate-950/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          
-          {/* Left: Hamburger menu button */}
-          <button
-            onClick={() => setIsMenuOpen(true)}
-            className="p-2 -ml-2 rounded-lg bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 transition"
-            title="Open navigation menu"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
+    <div className="chronos-app-shell">
 
-          {/* Center/Right: Empty spacing keeping it clean */}
-          <div className="flex items-center space-x-2">
-            {/* Optional badge or status indicator if desired, otherwise empty */}
+      {/* ── GLASS NAV BAR ───────────────────────────────────── */}
+      <header className="chronos-app-nav">
+        <div className="chronos-app-nav-inner">
+
+          {/* Left: Hamburger + Brand */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button
+              id="btn-open-menu"
+              onClick={() => setIsMenuOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '2.25rem',
+                height: '2.25rem',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(255,255,255,0.07)',
+                color: 'rgba(255,255,255,0.8)',
+                cursor: 'pointer',
+                transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+              title="Open navigation menu"
+            >
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            <span className="brand" style={{ fontSize: '1.2rem' }}>Chronos</span>
+          </div>
+
+          {/* Centre: Inline nav links (desktop) */}
+          <nav style={{ display: 'flex', gap: '0.25rem' }}>
+            {navItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                className={`chronos-nav-link${currentPage === item.id ? ' active' : ''}`}
+              >
+                {item.shortLabel}
+              </button>
+            ))}
+          </nav>
+
+          {/* Right: Faculty badge + logout */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {currentFaculty && (
+              <span
+                className="badge"
+                style={{ marginBottom: 0, fontSize: '0.7rem' }}
+              >
+                {currentFaculty.is_admin ? '✦ Admin' : currentFaculty.name}
+              </span>
+            )}
+            {signOut && (
+              <button
+                id="btn-signout"
+                onClick={() => signOut()}
+                className="chronos-nav-link"
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Navigation Drawer Menu (Slide out from Left) */}
+      {/* ── SLIDE-OUT DRAWER ────────────────────────────────── */}
       <AnimatePresence>
         {isMenuOpen && (
           <>
-            {/* Backdrop Blur */}
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.4 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-slate-950/80 z-40 backdrop-blur-sm"
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(11,21,40,0.6)',
+                backdropFilter: 'blur(4px)',
+                zIndex: 40,
+              }}
             />
 
-            {/* Sidebar drawer content */}
+            {/* Drawer panel */}
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 left-0 h-full w-full max-w-xs bg-slate-900 border-r border-slate-800 shadow-2xl p-6 z-50 overflow-y-auto flex flex-col justify-between"
+              transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+              className="chronos-drawer"
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                height: '100%',
+                width: '100%',
+                maxWidth: '300px',
+                zIndex: 50,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '1.75rem',
+              }}
             >
-              <div>
-                {/* Drawer Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Navigation Menu</span>
-                  <button 
-                    onClick={() => setIsMenuOpen(false)}
-                    className="p-1.5 rounded-md bg-slate-950 border border-slate-850 text-slate-450 hover:text-slate-250 transition"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Nav Links List */}
-                <nav className="flex flex-col space-y-1">
-                  {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = currentPage === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => handleNavClick(item.id)}
-                        className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-semibold transition text-left ${
-                          isActive 
-                            ? 'text-indigo-400 bg-slate-950 border-l-2 border-indigo-500' 
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-950/50'
-                        }`}
-                      >
-                        <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-400' : 'text-slate-450'}`} />
-                        <span>{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </nav>
-              </div>
-
-              {/* Drawer Bottom Actions */}
-              <div className="pt-4 border-t border-slate-800 space-y-4">
-                {/* Logout Action */}
+              {/* Drawer header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                <span className="brand" style={{ fontSize: '1.2rem' }}>Chronos</span>
                 <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    signOut();
+                  onClick={() => setIsMenuOpen(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '8px',
+                    color: 'rgba(255,255,255,0.7)',
+                    cursor: 'pointer',
+                    width: '2rem',
+                    height: '2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
-                  className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition duration-150"
                 >
-                  <LogOut className="w-4.5 h-4.5" />
-                  <span>Logout Session</span>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
+
+              {/* Profile card in drawer */}
+              {currentFaculty && (
+                <div
+                  className="track-card"
+                  style={{ padding: '1.25rem 1.5rem', marginBottom: '1.5rem', borderRadius: '16px' }}
+                >
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#fff' }}>
+                    {currentFaculty.name}
+                  </p>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.55)' }}>
+                    {currentFaculty.dept} · {currentFaculty.specialization}
+                  </p>
+                  {currentFaculty.is_admin && (
+                    <span className="badge" style={{ marginTop: '0.75rem', marginBottom: 0 }}>Admin</span>
+                  )}
+                </div>
+              )}
+
+              {/* Nav links */}
+              <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', flex: 1 }}>
+                {navItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={`chronos-nav-link${currentPage === item.id ? ' active' : ''}`}
+                    style={{
+                      textAlign: 'left',
+                      borderRadius: '12px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+
+              {/* Drawer footer */}
+              {signOut && (
+                <button
+                  onClick={() => signOut()}
+                  className="btn btn-secondary"
+                  style={{ marginTop: '1.5rem', fontSize: '0.875rem', padding: '0.75rem 1.25rem', width: '100%', borderRadius: '14px' }}
+                >
+                  Sign Out
+                </button>
+              )}
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* Main Content Area */}
-      <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* ── MAIN CONTENT ─────────────────────────────────────── */}
+      <main className="chronos-main">
         <motion.div
           key={currentPage}
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="w-full"
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         >
           {children}
         </motion.div>
       </main>
 
-      {/* Persistent Footer */}
-      <footer className="w-full border-t border-slate-900 bg-slate-955 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <div>
-            &copy; {new Date().getFullYear()} Console. All rights reserved.
-          </div>
-          
-          <div className="flex items-center space-x-6">
-            <a href="#docs" className="hover:text-slate-350 transition">Docs</a>
-            <a href="#api" className="hover:text-slate-350 transition">API</a>
-            <a href="#support" className="hover:text-slate-350 transition">Support</a>
-          </div>
-
-          {/* System Mode Indicator */}
-          <div className="flex items-center space-x-2">
-            {isMockMode ? (
-              <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/5 border border-amber-500/20 text-amber-500 font-medium">
-                <AlertTriangle className="w-3 h-3 text-amber-500" />
-                <span>Mock Mode</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-500/5 border border-emerald-500/20 text-emerald-500 font-medium">
-                <CheckCircle className="w-3 h-3 text-emerald-500" />
-                <span>Supabase Live Auth</span>
-              </div>
+      {/* ── GLASS FOOTER ─────────────────────────────────────── */}
+      <footer className="chronos-footer">
+        <div className="chronos-footer-inner">
+          <span>© {new Date().getFullYear()} Chronos Faculty Automation Platform</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span className={`mode-pill ${isMockMode ? 'mode-pill-mock' : 'mode-pill-live'}`}>
+              {isMockMode ? 'Mock Mode' : 'Live Database'}
+            </span>
+            {currentFaculty && (
+              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>
+                {currentFaculty.name} · {currentFaculty.dept}
+              </span>
             )}
           </div>
         </div>

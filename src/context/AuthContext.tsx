@@ -15,7 +15,7 @@ interface AuthContextType {
   loading: boolean;
   isMockMode: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string, isAdmin?: boolean) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (fullName: string) => Promise<{ error: string | null }>;
 }
@@ -183,18 +183,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Sign Up Action
-  const signUp = async (email: string, password: string, fullName: string): Promise<{ error: string | null }> => {
+  const signUp = async (email: string, password: string, fullName: string, isAdmin: boolean = false): Promise<{ error: string | null }> => {
     if (!isMockMode && supabase) {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: fullName
+            full_name: fullName,
+            is_admin: isAdmin
           }
         }
       });
       if (error) return { error: error.message };
+      
+      const authUser = data?.user;
+      if (authUser) {
+        const { error: dbErr } = await supabase.from('faculty').insert({
+          id: authUser.id,
+          name: fullName,
+          department: isAdmin ? 'Academic Administration' : 'Computer Science',
+          specialization: isAdmin ? 'Operations' : 'General Eng',
+          is_admin: isAdmin,
+          email: email.toLowerCase()
+        });
+        if (dbErr) {
+          console.warn('Error inserting new user into faculty table:', dbErr.message);
+        }
+      }
       return { error: null };
     } else {
       // Mock Sign Up
@@ -213,6 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password, // stored plain for mock simulation purposes
         fullName,
+        is_admin: isAdmin,
         createdAt: rightNow,
         updatedAt: rightNow
       };
@@ -227,7 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         aud: 'authenticated',
         role: 'authenticated',
         created_at: rightNow,
-        user_metadata: { full_name: fullName },
+        user_metadata: { full_name: fullName, is_admin: isAdmin },
         app_metadata: {}
       } as unknown as User;
 

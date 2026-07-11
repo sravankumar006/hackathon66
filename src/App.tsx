@@ -1,50 +1,74 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { AuthStack } from './components/AuthStack';
+import { SystemProvider } from './context/SystemContext';
 import { Layout } from './components/Layout';
 import type { PageId } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
-import { Analytics } from './pages/Analytics';
-import { Explore } from './pages/Explore';
-import { Activity } from './pages/Activity';
+import { LeaveSwaps } from './pages/LeaveSwaps';
 import { Settings } from './pages/Settings';
-import { Cpu } from 'lucide-react';
+import { Landing } from './pages/Landing';
+import { AuthStack } from './components/AuthStack';
+import { AdminDashboard } from './pages/AdminDashboard';
+
+import { useSystem } from './context/SystemContext';
 
 const MainAppContent: React.FC = () => {
+  const { currentPage, setCurrentPage } = useSystem();
   const { user, loading } = useAuth();
-  const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
-        <div className="relative flex items-center justify-center">
-          <div className="absolute w-16 h-16 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin" />
-          <Cpu className="w-6 h-6 text-indigo-400 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-slate-450 uppercase font-bold tracking-widest">ApexOps Gateway</p>
-          <p className="text-[10px] text-slate-600 mt-1">Initializing secure credentials channel...</p>
-        </div>
+      <div className="chronos-canvas hero-container" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div className="chronos-spinner" />
       </div>
     );
   }
 
-  // Unauthenticated Flow
+  if (currentPage === 'landing') {
+    return (
+      <Landing 
+        onEnter={(page) => {
+          setCurrentPage(page as PageId);
+        }} 
+      />
+    );
+  }
+
+  // Auth Gate: Show login page if not authenticated
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <AuthStack />
+      <div className="chronos-canvas hero-container" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div className="track-card" style={{ width: '100%', maxWidth: '440px', padding: '2.5rem 2rem' }}>
+          <AuthStack />
+        </div>
+        <button
+          onClick={() => setCurrentPage('landing')}
+          style={{
+            marginTop: '1.25rem',
+            fontSize: '0.8rem',
+            color: 'rgba(255,255,255,0.5)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            fontFamily: 'inherit',
+          }}
+        >
+          ← Back to Landing Page
+        </button>
       </div>
     );
   }
 
-  // Authenticated Flow
+  // Admin Portal Workspace Layout
+  if (currentPage === 'admin_dashboard') {
+    return <AdminDashboard />;
+  }
+
   return (
-    <Layout currentPage={currentPage} setCurrentPage={setCurrentPage}>
+    <Layout currentPage={currentPage as PageId} setCurrentPage={setCurrentPage}>
       {currentPage === 'dashboard' && <Dashboard />}
-      {currentPage === 'analytics' && <Analytics />}
-      {currentPage === 'explore' && <Explore />}
-      {currentPage === 'activity' && <Activity />}
+      {currentPage === 'leaves' && <LeaveSwaps />}
       {currentPage === 'settings' && <Settings />}
     </Layout>
   );
@@ -53,7 +77,9 @@ const MainAppContent: React.FC = () => {
 function App() {
   return (
     <AuthProvider>
-      <MainAppContent />
+      <SystemProvider>
+        <MainAppContent />
+      </SystemProvider>
     </AuthProvider>
   );
 }

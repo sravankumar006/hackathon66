@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { useSystem } from '../context/SystemContext';
+import { supabase } from '../supabaseClient';
 import { 
   Shield, 
   Activity, 
@@ -12,13 +14,15 @@ import {
   ArrowLeft, 
   AlertTriangle, 
   Loader2,
-  Cpu
+  Calendar
 } from 'lucide-react';
 
 export const AuthStack: React.FC = () => {
   const { signIn, signUp, isMockMode } = useAuth();
+  const { setCurrentPage } = useSystem();
   const [activeCard, setActiveCard] = useState<'intro' | 'auth'>('intro');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [roleSelection, setRoleSelection] = useState<'Faculty' | 'Admin'>('Faculty');
   
   // Form State
   const [email, setEmail] = useState('');
@@ -47,10 +51,81 @@ export const AuthStack: React.FC = () => {
     try {
       if (authMode === 'signin') {
         const { error: err } = await signIn(email, password);
-        if (err) setError(err);
+        if (err) {
+          setError(err);
+          setLoading(false);
+          return;
+        }
+
+        // Successfully logged in! Validate the user's role
+        let is_admin = false;
+        if (isMockMode) {
+          // Mock mode: match default emails
+          if (email.toLowerCase() === 'admin@university.edu') {
+            is_admin = true;
+          } else if (email.toLowerCase() === 'aris@university.edu') {
+            is_admin = false;
+          } else {
+            is_admin = email.toLowerCase().includes('admin');
+          }
+        } else if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          const authUser = session?.user;
+          if (authUser) {
+            let { data: facultyData, error: dbError } = await supabase
+              .from('faculty')
+              .select('*')
+              .eq('id', authUser.id)
+              .single();
+
+            // Fallback to email query for seed data matching
+            if (dbError || !facultyData) {
+              const { data: emailData } = await supabase
+                .from('faculty')
+                .select('*')
+                .eq('email', authUser.email?.toLowerCase())
+                .single();
+              facultyData = emailData;
+            }
+
+            if (facultyData) {
+              is_admin = facultyData.is_admin;
+            } else {
+              is_admin = authUser.user_metadata?.is_admin || authUser.email?.toLowerCase().includes('admin') || false;
+            }
+          }
+        }
+
+        // Role enforcement logic
+        if (is_admin) {
+          setCurrentPage('admin_dashboard');
+        } else if (roleSelection === 'Admin') {
+          // Regular faculty member attempting to log in to the admin portal
+          if (supabase) {
+            await supabase.auth.signOut();
+          }
+          localStorage.removeItem('apexops_mock_session');
+          setError('Access Denied: Invalid role privileges.');
+          setLoading(false);
+          return;
+        } else {
+          setCurrentPage('dashboard');
+        }
+
       } else {
-        const { error: err } = await signUp(email, password, fullName);
-        if (err) setError(err);
+        const { error: err } = await signUp(email, password, fullName, roleSelection === 'Admin');
+        if (err) {
+          setError(err);
+          setLoading(false);
+          return;
+        }
+        // Redirect based on role on signup
+        const resolvedIsAdmin = roleSelection === 'Admin' || email.toLowerCase().includes('admin');
+        if (resolvedIsAdmin) {
+          setCurrentPage('admin_dashboard');
+        } else {
+          setCurrentPage('dashboard');
+        }
       }
     } catch (err: any) {
       setError(err?.message || 'An unexpected error occurred');
@@ -65,10 +140,7 @@ export const AuthStack: React.FC = () => {
   };
 
   return (
-    <div className="relative flex items-center justify-center min-h-[80vh] w-full px-4 overflow-hidden py-12">
-      {/* Background Decorative Elements */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+      <div className="relative flex flex-col items-center justify-center min-h-[80vh] w-full px-4 py-12">
 
       {/* Stack Container */}
       <div className="relative w-full max-w-lg h-[580px]">
@@ -93,61 +165,61 @@ export const AuthStack: React.FC = () => {
                 zIndex: 10,
                 transition: { type: 'spring', stiffness: 120, damping: 18 }
               }}
-              className="absolute inset-0 flex flex-col justify-between p-8 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl shadow-indigo-950/20"
+              className="track-card absolute inset-0 flex flex-col justify-between"
             >
               <div>
                 {/* Brand Header */}
-                <div className="flex items-center space-x-3 mb-8">
-                  <div className="p-2.5 bg-indigo-650 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-900/30">
-                    <Cpu className="w-6 h-6 text-indigo-100" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '2rem' }}>
+                  <div style={{ padding: '0.625rem', background: 'rgba(255,255,255,0.15)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.2)' }}>
+                    <Calendar style={{ width: '1.5rem', height: '1.5rem', color: '#fff' }} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold tracking-tight text-slate-100">ApexOps</h2>
-                    <p className="text-xs text-slate-400 font-medium">Enterprise Cloud Management</p>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', margin: 0 }}>Chronos</h2>
+                    <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', margin: 0, fontWeight: 500 }}>Leave & Timetable Management</p>
                   </div>
                 </div>
 
                 {/* Tagline */}
-                <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight leading-tight mb-4 text-left">
-                  Streamline Your <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-indigo-300">
-                    Cloud Infrastructure.
+                <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '1rem', textAlign: 'left' }}>
+                  Automate Your{' '}<br />
+                  <span style={{ background: 'linear-gradient(90deg, #a3e635, #17a2b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                    Academic Operations.
                   </span>
                 </h1>
                 
-                <p className="text-sm text-slate-400 text-left mb-8">
-                  Monitor core telemetry metrics, explore unified resources, inspect active system operations, and audit system activities from a singular dashboard.
+                <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.6)', textAlign: 'left', marginBottom: '2rem' }}>
+                  Manage faculty leave requests, automate timetable substitutions, and monitor department availability from a unified dashboard.
                 </p>
 
                 {/* Features List */}
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3 text-left">
-                    <div className="mt-1 p-1 bg-slate-800/80 rounded-md">
-                      <TrendingUp className="w-4 h-4 text-indigo-450" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                    <div style={{ marginTop: '2px', padding: '0.25rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', flexShrink: 0 }}>
+                      <TrendingUp style={{ width: '1rem', height: '1rem', color: 'rgba(255,255,255,0.8)' }} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-200">Real-time Analytics</h4>
-                      <p className="text-xs text-slate-450">Inspect CPU loads, throughput, and system latencies dynamically.</p>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#fff', margin: 0 }}>Smart Allocations</h4>
+                      <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', margin: 0 }}>Automatically find substitutes matching department and specialization.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start space-x-3 text-left">
-                    <div className="mt-1 p-1 bg-slate-800/80 rounded-md">
-                      <Compass className="w-4 h-4 text-indigo-450" />
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                    <div style={{ marginTop: '2px', padding: '0.25rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', flexShrink: 0 }}>
+                      <Compass style={{ width: '1rem', height: '1rem', color: 'rgba(255,255,255,0.8)' }} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-200">Resource Discovery</h4>
-                      <p className="text-xs text-slate-450">Find, search, and filter standard deployments and database clusters.</p>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#fff', margin: 0 }}>Live Timetables</h4>
+                      <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', margin: 0 }}>View real-time class schedules and faculty availability.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start space-x-3 text-left">
-                    <div className="mt-1 p-1 bg-slate-800/80 rounded-md">
-                      <Activity className="w-4 h-4 text-indigo-450" />
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                    <div style={{ marginTop: '2px', padding: '0.25rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', flexShrink: 0 }}>
+                      <Activity style={{ width: '1rem', height: '1rem', color: 'rgba(255,255,255,0.8)' }} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-200">Audit Trails</h4>
-                      <p className="text-xs text-slate-450">Track security logs and system activity across teams securely.</p>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#fff', margin: 0 }}>Peer Swaps</h4>
+                      <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', margin: 0 }}>Request and approve period swaps with fellow faculty members.</p>
                     </div>
                   </div>
                 </div>
@@ -156,7 +228,7 @@ export const AuthStack: React.FC = () => {
               {/* Get Started Button */}
               <button
                 onClick={() => handleCardSwitch('auth')}
-                className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-750 text-indigo-50 font-semibold rounded-xl transition duration-200 shadow-lg shadow-indigo-655/20 hover:shadow-indigo-750/30 flex items-center justify-center space-x-2 text-sm"
+              className="btn btn-primary" style={{ width: '100%', borderRadius: '14px', marginTop: '1rem' }}
               >
                 <span>Get Started</span>
               </button>
@@ -182,55 +254,41 @@ export const AuthStack: React.FC = () => {
                 x: -60,
                 zIndex: 10
               }}
-              className="absolute inset-0 flex flex-col justify-between p-8 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl shadow-indigo-950/20"
+              className="track-card absolute inset-0 flex flex-col justify-between"
             >
               <div>
                 {/* Back Link & Title */}
                 <div className="flex items-center justify-between mb-6">
                   <button
                     onClick={() => handleCardSwitch('intro')}
-                    className="flex items-center space-x-1.5 text-slate-450 hover:text-slate-250 transition text-xs font-medium"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: 'rgba(255,255,255,0.55)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, fontFamily: 'inherit' }}
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Intro</span>
+                    <ArrowLeft style={{ width: '1rem', height: '1rem' }} />
+                    Back to Intro
                   </button>
-                  <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    {isMockMode ? 'MOCK AUTH ACTIVE' : 'SUPABASE AUTH'}
+                  <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em', padding: '0.2rem 0.625rem', borderRadius: '9999px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                    {isMockMode ? 'MOCK AUTH' : 'SUPABASE AUTH'}
                   </span>
                 </div>
 
-                <h2 className="text-2xl font-bold text-slate-100 mb-1 text-left">
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', marginBottom: '0.25rem', textAlign: 'left' }}>
                   {authMode === 'signin' ? 'Welcome Back' : 'Create Account'}
                 </h2>
-                <p className="text-xs text-slate-450 text-left mb-6">
+                <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', textAlign: 'left', marginBottom: '1.25rem' }}>
                   {authMode === 'signin' 
                     ? 'Enter your credentials to access your operations dashboard.' 
-                    : 'Sign up to deploy mock databases and view live logs.'
+                    : 'Sign up to manage leaves and view timetables.'
                   }
                 </p>
 
                 {/* Tab Switcher */}
-                <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-lg mb-6 border border-slate-850">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('signin'); setError(null); }}
-                    className={`py-2 text-xs font-semibold rounded-md transition duration-150 ${
-                      authMode === 'signin' 
-                        ? 'bg-slate-805 text-slate-100 shadow-sm' 
-                        : 'text-slate-450 hover:text-slate-250'
-                    }`}
-                  >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem', padding: '0.3rem', background: 'rgba(255,255,255,0.07)', borderRadius: '12px', marginBottom: '1.25rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <button type="button" onClick={() => { setAuthMode('signin'); setError(null); }}
+                    style={{ padding: '0.5rem', fontSize: '0.8rem', fontWeight: 700, borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s', background: authMode === 'signin' ? 'rgba(255,255,255,0.18)' : 'transparent', color: authMode === 'signin' ? '#fff' : 'rgba(255,255,255,0.45)' }}>
                     Sign In
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('signup'); setError(null); }}
-                    className={`py-2 text-xs font-semibold rounded-md transition duration-150 ${
-                      authMode === 'signup' 
-                        ? 'bg-slate-805 text-slate-100 shadow-sm' 
-                        : 'text-slate-450 hover:text-slate-250'
-                    }`}
-                  >
+                  <button type="button" onClick={() => { setAuthMode('signup'); setError(null); }}
+                    style={{ padding: '0.5rem', fontSize: '0.8rem', fontWeight: 700, borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s', background: authMode === 'signup' ? 'rgba(255,255,255,0.18)' : 'transparent', color: authMode === 'signup' ? '#fff' : 'rgba(255,255,255,0.45)' }}>
                     Register
                   </button>
                 </div>
@@ -238,71 +296,56 @@ export const AuthStack: React.FC = () => {
                 {/* Form Input fields */}
                 <form onSubmit={handleAuthSubmit} className="space-y-4">
                   {error && (
-                    <div className="flex items-start space-x-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs text-left animate-shake">
-                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', padding: '0.75rem', borderRadius: '10px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', color: '#fca5a5', fontSize: '0.8rem', textAlign: 'left' }} className="animate-shake">
+                      <AlertTriangle style={{ width: '1rem', height: '1rem', marginTop: '1px', flexShrink: 0 }} />
                       <span>{error}</span>
                     </div>
                   )}
 
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
+                      Portal Role Selection
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem', padding: '0.3rem', background: 'rgba(255,255,255,0.07)', borderRadius: '12px', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <button type="button" onClick={() => setRoleSelection('Faculty')}
+                        style={{ padding: '0.5rem', fontSize: '0.8rem', fontWeight: 700, borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s', background: roleSelection === 'Faculty' ? 'rgba(255,255,255,0.18)' : 'transparent', color: roleSelection === 'Faculty' ? '#fff' : 'rgba(255,255,255,0.45)' }}>
+                        Faculty Portal
+                      </button>
+                      <button type="button" onClick={() => setRoleSelection('Admin')}
+                        style={{ padding: '0.5rem', fontSize: '0.8rem', fontWeight: 700, borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s', background: roleSelection === 'Admin' ? 'rgba(255,255,255,0.18)' : 'transparent', color: roleSelection === 'Admin' ? '#fff' : 'rgba(255,255,255,0.45)' }}>
+                        Admin Portal
+                      </button>
+                    </div>
+                  </div>
+
                   {authMode === 'signup' && (
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 text-left">
-                        Full Name
-                      </label>
-                      <div className="relative">
-                        <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-                        <input
-                          type="text"
-                          required
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          placeholder="e.g. Alex Morgan"
-                          className="w-full py-2.5 pl-10 pr-4 bg-slate-950 border border-slate-850 hover:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg text-slate-200 text-sm placeholder-slate-600 transition outline-none"
-                        />
+                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>Full Name</label>
+                      <div style={{ position: 'relative' }}>
+                        <User style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', width: '1rem', height: '1rem', color: 'rgba(255,255,255,0.35)' }} />
+                        <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Alex Morgan" className="glass-input" style={{ paddingLeft: '2.5rem' }} />
                       </div>
                     </div>
                   )}
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 text-left">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@company.com"
-                        className="w-full py-2.5 pl-10 pr-4 bg-slate-950 border border-slate-850 hover:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg text-slate-200 text-sm placeholder-slate-600 transition outline-none"
-                      />
+                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>Email Address</label>
+                    <div style={{ position: 'relative' }}>
+                      <Mail style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', width: '1rem', height: '1rem', color: 'rgba(255,255,255,0.35)' }} />
+                      <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" className="glass-input" style={{ paddingLeft: '2.5rem' }} />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 text-left">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-                      <input
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full py-2.5 pl-10 pr-4 bg-slate-950 border border-slate-850 hover:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg text-slate-200 text-sm placeholder-slate-600 transition outline-none"
-                      />
+                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>Password</label>
+                    <div style={{ position: 'relative' }}>
+                      <Lock style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', width: '1rem', height: '1rem', color: 'rgba(255,255,255,0.35)' }} />
+                      <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="glass-input" style={{ paddingLeft: '2.5rem' }} />
                     </div>
                   </div>
 
                   {/* Submit Button */}
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3 px-4 bg-indigo-650 hover:bg-indigo-700 text-indigo-50 font-semibold rounded-lg transition duration-200 shadow-md shadow-indigo-950/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm mt-6"
-                  >
+                  <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', borderRadius: '14px', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: loading ? 0.6 : 1 }}>
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -319,7 +362,7 @@ export const AuthStack: React.FC = () => {
               </div>
 
               {/* Mode Specific Note */}
-              <div className="text-[10px] text-slate-500 text-center">
+              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>
                 {isMockMode ? (
                   <p>Running in Mock Mode. Any credentials will simulate a successful login.</p>
                 ) : (
@@ -330,6 +373,6 @@ export const AuthStack: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
-    </div>
+      </div>
   );
 };
