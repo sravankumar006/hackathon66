@@ -79,8 +79,8 @@ interface SystemContextType {
   currentFaculty: Faculty | null;
   
   // Routing / Redirection States
-  currentPage: 'landing' | 'dashboard' | 'leaves' | 'settings' | 'admin_dashboard';
-  setCurrentPage: (page: 'landing' | 'dashboard' | 'leaves' | 'settings' | 'admin_dashboard') => void;
+  currentPage: 'landing' | 'dashboard' | 'leaves' | 'explore' | 'analytics' | 'activity' | 'settings' | 'admin_dashboard';
+  setCurrentPage: (page: 'landing' | 'dashboard' | 'leaves' | 'explore' | 'analytics' | 'activity' | 'settings' | 'admin_dashboard') => void;
   activeLeaveTab: 'form' | 'history';
   setActiveLeaveTab: (tab: 'form' | 'history') => void;
 
@@ -140,7 +140,7 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentFaculty, setCurrentFaculty] = useState<Faculty | null>(null);
   
   // Lifted routing states
-  const [currentPage, setCurrentPage] = useState<'landing' | 'dashboard' | 'leaves' | 'settings' | 'admin_dashboard'>('landing');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'dashboard' | 'leaves' | 'explore' | 'analytics' | 'activity' | 'settings' | 'admin_dashboard'>('landing');
   const [activeLeaveTab, setActiveLeaveTab] = useState<'form' | 'history'>('form');
 
   const fetchSystemState = async () => {

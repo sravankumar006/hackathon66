@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSystem } from '../context/SystemContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type PageId = 'dashboard' | 'leaves' | 'settings';
+export type PageId = 'dashboard' | 'leaves' | 'explore' | 'analytics' | 'activity' | 'settings';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -19,6 +19,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurren
   const navItems = [
     { id: 'dashboard', label: 'Dashboard & Operations', shortLabel: 'Dashboard' },
     { id: 'leaves',    label: 'Leave & Swaps',          shortLabel: 'Leaves'    },
+    { id: 'explore',   label: 'Timetable Explorer',     shortLabel: 'Explore'   },
+    { id: 'analytics', label: 'Analytics',              shortLabel: 'Analytics' },
+    { id: 'activity',  label: 'Activity Log',           shortLabel: 'Activity'  },
     { id: 'settings',  label: 'Profile & Settings',     shortLabel: 'Settings'  },
   ] as const;
 

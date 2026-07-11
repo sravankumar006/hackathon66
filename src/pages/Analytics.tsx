@@ -1,230 +1,224 @@
-import React, { useState } from 'react';
-import { 
-  LineChart, 
-  Calendar,
-  Filter,
-  Info
+import React from 'react';
+import { useSystem } from '../context/SystemContext';
+import {
+  LineChart,
+  CalendarClock,
+  Repeat,
+  Users,
+  TrendingUp,
+  BarChart2,
 } from 'lucide-react';
 
-interface MetricDetail {
-  label: string;
-  value: string;
-}
-
-const mockChartData: Record<'24h' | '7d' | '30d', { labels: string[]; points: number[]; svgPath: string; areaPath: string }> = {
-  '24h': {
-    labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
-    points: [0, 0, 0, 0, 0, 0, 0],
-    svgPath: 'M 10 200 L 91.6 200 L 173.3 200 L 255 200 L 336.6 200 L 418.3 200 L 500 200',
-    areaPath: 'M 10 200 L 91.6 200 L 173.3 200 L 255 200 L 336.6 200 L 418.3 200 L 500 200 L 500 200 L 10 200 Z'
-  },
-  '7d': {
-    labels: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'],
-    points: [0, 0, 0, 0, 0, 0, 0],
-    svgPath: 'M 10 200 L 91.6 200 L 173.3 200 L 255 200 L 336.6 200 L 418.3 200 L 500 200',
-    areaPath: 'M 10 200 L 91.6 200 L 173.3 200 L 255 200 L 336.6 200 L 418.3 200 L 500 200 L 500 200 L 10 200 Z'
-  },
-  '30d': {
-    labels: ['W1', 'W2', 'W3', 'W4'],
-    points: [0, 0, 0, 0],
-    svgPath: 'M 10 200 L 173.3 200 L 336.6 200 L 500 200',
-    areaPath: 'M 10 200 L 173.3 200 L 336.6 200 L 500 200 L 500 200 L 10 200 Z'
-  }
-};
-
 export const Analytics: React.FC = () => {
-  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const {
+    faculties,
+    leaveRequests,
+    substituteAllocations,
+    swapRequests,
+    substitutionRequests,
+  } = useSystem();
 
-  const activeData = mockChartData[timeRange];
+  // ── Leave metrics ──────────────────────────────────────
+  const totalLeaves = leaveRequests.length;
+  const approvedLeaves = leaveRequests.filter((l) => l.status === 'Approved').length;
+  const pendingLeaves = leaveRequests.filter((l) => l.status === 'Pending').length;
+  const rejectedLeaves = leaveRequests.filter((l) => l.status === 'Rejected').length;
 
-  const statCards: MetricDetail[] = [
-    { label: 'Data Point 1', value: '--' },
-    { label: 'Data Point 2', value: '--' },
-    { label: 'Data Point 3', value: '--' },
-    { label: 'Data Point 4', value: '--' },
+  // ── Coverage metrics ───────────────────────────────────
+  const coveredSlots = substituteAllocations.filter((a) => a.substitute_faculty_id !== null).length;
+  const freeSlots = substituteAllocations.filter((a) => a.substitute_faculty_id === null).length;
+  const totalSlots = coveredSlots + freeSlots;
+  const coverageRate = totalSlots > 0 ? Math.round((coveredSlots / totalSlots) * 100) : 100;
+
+  // ── Swap metrics ───────────────────────────────────────
+  const totalSwaps = swapRequests.length;
+  const approvedSwaps = swapRequests.filter((s) => s.status === 'Approved').length;
+
+  // ── Substitution requests ──────────────────────────────
+  const pendingSubReqs = (substitutionRequests || []).filter((r) => r.status === 'Pending').length;
+
+  const statCards = [
+    { label: 'Total Leave Requests', value: totalLeaves, sub: `${pendingLeaves} pending`, icon: CalendarClock },
+    { label: 'Approved Leaves', value: approvedLeaves, sub: `${rejectedLeaves} rejected`, icon: TrendingUp },
+    { label: 'Substitutions Covered', value: coveredSlots, sub: `${freeSlots} free periods`, icon: Users },
+    { label: 'Hour Swaps', value: totalSwaps, sub: `${approvedSwaps} approved`, icon: Repeat },
   ];
+
+  // Leave status distribution for the bar chart
+  const statusDist = [
+    { label: 'Approved', value: approvedLeaves, color: 'bg-emerald-500' },
+    { label: 'Pending', value: pendingLeaves, color: 'bg-amber-500' },
+    { label: 'Rejected', value: rejectedLeaves, color: 'bg-rose-500' },
+  ];
+  const maxStatus = Math.max(1, ...statusDist.map((s) => s.value));
+
+  // Leaves by department
+  const deptStats: Record<string, number> = {};
+  faculties.forEach((f) => {
+    if (!f.is_admin) deptStats[f.dept] = deptStats[f.dept] || 0;
+  });
+  leaveRequests.forEach((l) => {
+    const fac = faculties.find((f) => f.id === l.faculty_id);
+    if (fac && !fac.is_admin) {
+      deptStats[fac.dept] = (deptStats[fac.dept] || 0) + 1;
+    }
+  });
+  const deptEntries = Object.entries(deptStats).sort((a, b) => b[1] - a[1]);
+  const maxDept = Math.max(1, ...deptEntries.map(([, v]) => v));
 
   return (
     <div className="space-y-6">
-      {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Title */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-left">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-100 tracking-tight flex items-center">
             <LineChart className="w-6 h-6 text-indigo-400 mr-2" />
             Analytics
           </h1>
           <p className="text-slate-400 text-sm">
-            Monitor, inspect, and filter core operations telemetry details.
+            Live operational telemetry across leaves, substitutions and hour swaps.
           </p>
         </div>
-        
-        {/* Timeframe Selector */}
-        <div className="flex bg-slate-900 border border-slate-850 p-1 rounded-lg self-start md:self-auto">
-          {(['24h', '7d', '30d'] as const).map((range) => (
-            <button
-              key={range}
-              onClick={() => { setTimeRange(range); setHoverIndex(null); }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-                timeRange === range
-                  ? 'bg-indigo-600 text-indigo-50 shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {range.toUpperCase()}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 bg-slate-900 border border-slate-850 px-3.5 py-2 rounded-xl text-xs text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          Coverage success rate:
+          <strong className="text-slate-100 ml-1">{coverageRate}%</strong>
         </div>
       </div>
 
-      {/* Analytics Main Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* SVG Graphic Chart Card */}
-        <div className="bg-slate-900 border border-slate-850 p-6 rounded-xl lg:col-span-2">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-350">Data Trends</h3>
-              <p className="text-xs text-slate-500">Visualization of metrics over selected timeframe.</p>
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="bg-slate-900 border border-slate-850 p-5 rounded-xl text-left">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  {stat.label}
+                </span>
+                <Icon className="w-4 h-4 text-indigo-400" />
+              </div>
+              <h4 className="text-2xl font-black text-slate-100">{stat.value}</h4>
+              <p className="text-[11px] text-slate-500 mt-1">{stat.sub}</p>
             </div>
-          </div>
+          );
+        })}
+      </div>
 
-          {/* Core SVG Chart */}
-          <div className="relative w-full h-[240px] mt-4 flex flex-col justify-between">
-            {/* Chart SVG wrapper */}
-            <svg 
-              viewBox="0 0 500 200" 
-              className="w-full h-[200px] overflow-visible"
-              preserveAspectRatio="none"
-            >
-              <defs>
-                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Leave status distribution */}
+        <div className="bg-slate-900 border border-slate-850 p-6 rounded-xl lg:col-span-2 text-left">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-350 mb-6 flex items-center">
+            <BarChart2 className="w-4 h-4 text-indigo-400 mr-2" />
+            Leave Request Status Distribution
+          </h3>
 
-              {/* Grid Lines */}
-              <line x1="10" y1="50" x2="500" y2="50" stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
-              <line x1="10" y1="100" x2="500" y2="100" stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
-              <line x1="10" y1="150" x2="500" y2="150" stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
-              <line x1="10" y1="200" x2="500" y2="200" stroke="#334155" strokeWidth="1" />
-
-              {/* Area Under Line (Gradient Fill) */}
-              <path
-                d={activeData.areaPath}
-                fill="url(#chartGradient)"
-                className="transition-all duration-300 ease-in-out"
-              />
-
-              {/* Indigo Line Path */}
-              <path
-                d={activeData.svgPath}
-                fill="none"
-                stroke="#6366f1"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="transition-all duration-300 ease-in-out"
-              />
-
-              {/* Interactive Circles / Anchors */}
-              {activeData.points.map((pt, idx) => {
-                const count = activeData.points.length;
-                const xVal = count > 1 ? 10 + (idx * 490) / (count - 1) : 250;
-                const yVal = 200 - (pt * 180) / 100;
-                
-                return (
-                  <g 
-                    key={idx} 
-                    onMouseEnter={() => setHoverIndex(idx)} 
-                    onMouseLeave={() => setHoverIndex(null)}
-                    className="cursor-pointer"
-                  >
-                    <circle
-                      cx={xVal}
-                      cy={yVal}
-                      r={hoverIndex === idx ? 7 : 4}
-                      fill={hoverIndex === idx ? '#4f46e5' : '#1e1b4b'}
-                      stroke="#6366f1"
-                      strokeWidth="2"
-                      className="transition-all duration-150"
-                    />
-                  </g>
-                );
-              })}
-            </svg>
-
-            {/* X-Axis labels */}
-            <div className="flex justify-between px-2.5 text-[10px] font-bold text-slate-500 tracking-wider">
-              {activeData.labels.map((lbl, idx) => (
-                <span key={idx}>{lbl}</span>
+          {totalLeaves === 0 ? (
+            <div className="py-12 border border-dashed border-slate-850 rounded-lg text-center text-slate-550 text-xs">
+              No leave requests recorded yet.
+            </div>
+          ) : (
+            <div className="flex items-end justify-around gap-6 h-56 pt-4">
+              {statusDist.map((s) => (
+                <div key={s.label} className="flex flex-col items-center justify-end flex-1 h-full">
+                  <span className="text-sm font-black text-slate-200 mb-2">{s.value}</span>
+                  <div
+                    className={`w-full max-w-[80px] rounded-t-lg ${s.color} transition-all duration-500`}
+                    style={{ height: `${(s.value / maxStatus) * 100}%`, minHeight: s.value > 0 ? '8px' : '0' }}
+                  />
+                  <span className="text-[11px] font-bold text-slate-400 mt-3 uppercase tracking-wider">
+                    {s.label}
+                  </span>
+                </div>
               ))}
             </div>
-
-            {/* Floating Detail Indicator */}
-            {hoverIndex !== null && (
-              <div 
-                className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-xs font-semibold shadow-md animate-fade-in"
-              >
-                <span className="text-slate-450">{activeData.labels[hoverIndex]}:</span>
-                <span className="text-indigo-400 font-bold">{activeData.points[hoverIndex]} Value</span>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* Info panel */}
-        <div className="bg-slate-900 border border-slate-850 p-6 rounded-xl flex flex-col justify-between">
+        {/* Coverage KPI */}
+        <div className="bg-slate-900 border border-slate-850 p-6 rounded-xl flex flex-col justify-between text-left">
           <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-350 mb-1">Metrics Status</h3>
-            <p className="text-xs text-slate-500 mb-6 font-medium">Bind diagnostic telemetry indexes below.</p>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-350 mb-6 flex items-center">
+              <TrendingUp className="w-4 h-4 text-indigo-400 mr-2" />
+              Coverage Overview
+            </h3>
 
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 p-3 bg-slate-950 border border-slate-850 rounded-lg text-slate-500">
-                <Info className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs">No status monitors configured.</span>
+            <div className="flex flex-col items-center py-4">
+              <div className="relative w-32 h-32 flex items-center justify-center">
+                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                  <path
+                    d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31"
+                    fill="none"
+                    stroke="#1e293b"
+                    strokeWidth="3"
+                  />
+                  <path
+                    d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31"
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="3"
+                    strokeDasharray={`${coverageRate}, 100`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-2xl font-black text-slate-100">{coverageRate}%</span>
+                  <span className="text-[9px] text-slate-500 uppercase tracking-widest">Covered</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 mt-4 text-xs">
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Slots covered</span>
+                <span className="font-mono font-bold text-slate-200">{coveredSlots}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Free periods</span>
+                <span className="font-mono font-bold text-slate-200">{freeSlots}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Pending sub. requests</span>
+                <span className="font-mono font-bold text-slate-200">{pendingSubReqs}</span>
               </div>
             </div>
           </div>
-
-          <div className="mt-8 text-[11px] text-slate-500 flex items-center justify-between">
-            <span className="flex items-center">
-              <Calendar className="w-3.5 h-3.5 mr-1" /> Period: {timeRange === '24h' ? '24h' : timeRange === '7d' ? '7d' : '30d'}
-            </span>
-          </div>
         </div>
       </div>
 
-      {/* Numerical Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat, idx) => (
-          <div key={idx} className="bg-slate-900 border border-slate-850 p-4.5 rounded-xl text-left">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
-              {stat.label}
-            </span>
-            <h4 className="text-lg font-bold text-slate-100 mb-1">{stat.value}</h4>
+      {/* Leaves by department */}
+      <div className="bg-slate-900 border border-slate-850 p-6 rounded-xl text-left">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-350 mb-6 flex items-center">
+          <Users className="w-4 h-4 text-indigo-400 mr-2" />
+          Leave Requests by Department
+        </h3>
+
+        {deptEntries.length === 0 ? (
+          <div className="py-10 border border-dashed border-slate-850 rounded-lg text-center text-slate-550 text-xs">
+            No department data available.
           </div>
-        ))}
-      </div>
-
-      {/* Aggregate Routes table */}
-      <div className="bg-slate-900 border border-slate-850 p-6 rounded-xl">
-        <div className="flex items-center justify-between mb-6 text-left">
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-350 flex items-center">
-              <Filter className="w-4 h-4 text-indigo-400 mr-2" />
-              Route Telemetry
-            </h3>
-            <p className="text-xs text-slate-550">Specific endpoint mappings and active response metrics.</p>
+        ) : (
+          <div className="space-y-4">
+            {deptEntries.map(([dept, count]) => (
+              <div key={dept} className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-300">{dept}</span>
+                  <span className="font-mono text-slate-400 font-bold">
+                    {count} {count === 1 ? 'request' : 'requests'}
+                  </span>
+                </div>
+                <div className="w-full bg-slate-950 rounded-full h-3 border border-slate-850 overflow-hidden p-0.5">
+                  <div
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${(count / maxDept) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-
-        <div className="py-12 border border-dashed border-slate-800 rounded-lg flex flex-col items-center justify-center text-slate-550 text-xs">
-          <p className="font-semibold">No route records available.</p>
-          <p className="text-[10px] mt-1">Bind your custom system endpoints or query metrics here.</p>
-        </div>
+        )}
       </div>
-
     </div>
   );
 };

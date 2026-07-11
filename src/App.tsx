@@ -5,6 +5,9 @@ import { Layout } from './components/Layout';
 import type { PageId } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { LeaveSwaps } from './pages/LeaveSwaps';
+import { Explore } from './pages/Explore';
+import { Analytics } from './pages/Analytics';
+import { Activity } from './pages/Activity';
 import { Settings } from './pages/Settings';
 import { Landing } from './pages/Landing';
 import { AuthStack } from './components/AuthStack';
@@ -69,6 +72,9 @@ const MainAppContent: React.FC = () => {
     <Layout currentPage={currentPage as PageId} setCurrentPage={setCurrentPage}>
       {currentPage === 'dashboard' && <Dashboard />}
       {currentPage === 'leaves' && <LeaveSwaps />}
+      {currentPage === 'explore' && <Explore />}
+      {currentPage === 'analytics' && <Analytics />}
+      {currentPage === 'activity' && <Activity />}
       {currentPage === 'settings' && <Settings />}
     </Layout>
   );

@@ -10,7 +10,7 @@ const sendRejectionEmail = (facultyEmail: string) => {
 };
 
 export const AdminDashboard: React.FC = () => {
-  const { leaveRequests, faculties, fetchSystemState } = useSystem();
+  const { leaveRequests, faculties, swapRequests, approveSwap, rejectSwap, fetchSystemState } = useSystem();
   const { user, signOut } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'leaves' | 'swaps'>('leaves');
@@ -140,7 +140,9 @@ export const AdminDashboard: React.FC = () => {
                 borderColor: activeTab === tab ? 'rgba(255,255,255,0.2)' : 'transparent',
               }}
             >
-              {tab === 'leaves' ? `Leave Approvals (${localPendingLeaves.length})` : 'Hour Swap Logs'}
+              {tab === 'leaves'
+                ? `Leave Approvals (${localPendingLeaves.length})`
+                : `Hour Swap Logs (${swapRequests.filter(s => s.status === 'PendingAdmin').length})`}
             </button>
           ))}
         </div>
@@ -252,11 +254,106 @@ export const AdminDashboard: React.FC = () => {
           </div>
         ) : (
           /* ── TAB: SWAPS ───────────────────────────────────── */
-          <div className="glass-panel" style={{ borderRadius: '20px', padding: '5rem 2rem', textAlign: 'center' }}>
-            <Layers style={{ width: '2.5rem', height: '2.5rem', color: 'rgba(255,255,255,0.2)', margin: '0 auto 1rem' }} />
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem' }}>
-              No active peer-to-peer hour swap requests require administrative oversight.
-            </p>
+          <div className="glass-panel" style={{ borderRadius: '20px', overflow: 'hidden' }}>
+            {swapRequests.length === 0 ? (
+              <div style={{ padding: '5rem 2rem', textAlign: 'center' }}>
+                <Layers style={{ width: '2.5rem', height: '2.5rem', color: 'rgba(255,255,255,0.2)', margin: '0 auto 1rem' }} />
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem' }}>
+                  No peer-to-peer hour swap requests have been raised yet.
+                </p>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="glass-table">
+                  <thead>
+                    <tr>
+                      <th style={{ paddingLeft: '1.5rem' }}>Requester</th>
+                      <th>Colleague</th>
+                      <th>Date</th>
+                      <th>Period</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: 'right', paddingRight: '1.5rem' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {swapRequests
+                      .slice()
+                      .sort((a, b) => (a.status === 'PendingAdmin' ? -1 : 1) - (b.status === 'PendingAdmin' ? -1 : 1))
+                      .map((s) => {
+                        const requester = faculties.find(f => f.id === s.requester_faculty_id);
+                        const receiver = faculties.find(f => f.id === s.receiver_faculty_id);
+                        const isActionable = s.status === 'PendingAdmin';
+
+                        const statusColor =
+                          s.status === 'Approved' ? { c: '#6ee7b7', b: 'rgba(52,211,153,0.35)', bg: 'rgba(52,211,153,0.12)' }
+                          : s.status === 'Rejected' ? { c: '#fca5a5', b: 'rgba(248,113,113,0.25)', bg: 'rgba(248,113,113,0.08)' }
+                          : s.status === 'PendingAdmin' ? { c: '#7dd3fc', b: 'rgba(56,189,248,0.3)', bg: 'rgba(56,189,248,0.1)' }
+                          : { c: '#fcd34d', b: 'rgba(251,191,36,0.3)', bg: 'rgba(251,191,36,0.1)' };
+
+                        const statusLabel =
+                          s.status === 'PendingReceiver' ? 'Awaiting Colleague'
+                          : s.status === 'PendingAdmin' ? 'Awaiting Admin'
+                          : s.status;
+
+                        return (
+                          <tr key={s.id}>
+                            <td style={{ paddingLeft: '1.5rem', fontWeight: 600, color: '#fff' }}>
+                              {requester ? requester.name : 'Unknown'}
+                            </td>
+                            <td style={{ color: 'rgba(255,255,255,0.7)' }}>
+                              {receiver ? receiver.name : 'Unknown'}
+                            </td>
+                            <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'rgba(255,255,255,0.8)' }}>
+                              {s.date}
+                            </td>
+                            <td style={{ color: 'rgba(255,255,255,0.7)' }}>Period {s.period}</td>
+                            <td>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center',
+                                padding: '0.2rem 0.6rem', borderRadius: '9999px',
+                                fontSize: '0.7rem', fontWeight: 700,
+                                border: `1px solid ${statusColor.b}`, background: statusColor.bg, color: statusColor.c,
+                              }}>
+                                {statusLabel}
+                              </span>
+                            </td>
+                            <td style={{ paddingRight: '1.5rem', textAlign: 'right' }}>
+                              {isActionable ? (
+                                <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+                                  <button
+                                    id={`btn-approve-swap-${s.id}`}
+                                    onClick={() => approveSwap(s.id)}
+                                    style={{
+                                      padding: '0.4rem 0.875rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700,
+                                      border: '1px solid rgba(52,211,153,0.35)', background: 'rgba(52,211,153,0.12)', color: '#6ee7b7',
+                                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem', fontFamily: 'inherit',
+                                    }}
+                                  >
+                                    <Check style={{ width: '0.875rem', height: '0.875rem' }} /> Approve
+                                  </button>
+                                  <button
+                                    id={`btn-reject-swap-${s.id}`}
+                                    onClick={() => rejectSwap(s.id)}
+                                    style={{
+                                      padding: '0.4rem 0.875rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700,
+                                      border: '1px solid rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.08)', color: '#fca5a5',
+                                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem', fontFamily: 'inherit',
+                                    }}
+                                  >
+                                    <X style={{ width: '0.875rem', height: '0.875rem' }} /> Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </main>
